@@ -1,0 +1,109 @@
+YLT, Young's Literal Translation
+(1898)
+
+CJB, The Complete Jewish Bible
+(1998)
+
+KJV, King James Version 1769 with Apocrypha and Strong's
+Numbers
+
+NKJV, New King James Version, 1982
+
+WEB, World English Bible
+
+RSV, Revised Standard Version
+(1952)
+
+TS2009, The Scriptures 2009
+
+LXXE, English version of the Septuagint Bible,
+1851
+
+TLV, Tree of Life Version
+
+LSB, The Legacy Standard Bible
+
+NASB, New American Standard Bible
+(1995)
+
+ESV, English Standard Version 2001,
+2016
+
+GNV, Geneva Bible (1599)
+
+DRB, Douay Rheims Bible
+
+NIV2011, New International Version,
+2011
+
+NIV, New International Version,
+1984
+
+NLT, New Living Translation, 2015
+
+NRSVCE, New Revised Standard Version Catholic Edition,
+1993
+
+NET, New English Translation, 2007
+
+NJB1985, New Jerusalem Bible, 1985
+
+
+SPE, Samaritan Pentateuch in English,
+2013
+
+LBP, Aramaic Of The Peshitta: Lamsa,
+1933
+
+AMP, Amplified Bible, 2015
+
+MSG, The Message, 2002
+
+LSV, Literal Standard Version
+
+BSB, The Holy Bible, Berean Standard
+Bible
+
+MEV, Modern English Version
+
+RSV2CE, Revised Standard Version Catholic
+Edition
+
+NABRE, New American Bible (Revised
+Edition)
+
+CSB17, Christian Standard Bible,
+2017
+
+CEVD, Contemporary English Version, 2006 (with
+Apocrypha)
+
+CEB, Common English Bible, 2011
+
+AUV, An Understandable Version,
+1995
+
+GNTD, Good News Translation (US Version),
+2001
+
+ERV, Easy-to-Read Version, 2006
+
+ASV, American Standard Version 1901 (with Strong's numbers)
+
+GNT, Good News Bible, 1976
+
+ISV, International Standard Version,
+2011
+
+NLV, New Life Version, 1969
+
+WPNT, Wilbur Pickering’s New
+Testament
+
+NIVUK, New International Version® (Anglicised), NIV®,
+2011
+
+TNIV, Today's New International Version,
+2005
+
+NIRV, New International Reader's Version
