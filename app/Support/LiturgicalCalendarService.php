@@ -9,11 +9,12 @@ use Illuminate\Support\Collection;
 class LiturgicalCalendarService
 {
     use HandlesCalendar;
+
     public function __construct(
         protected CatholicReadingsClient $client = new CatholicReadingsClient()
     ) {}
 
-    /** One date, cache-first. Fetches and caches on a miss. */
+    /** One date, cache-first. Fetches (both endpoints concurrently) and caches on a miss. */
     public function getDay(string $date): ?object
     {
         $cached = DB::table('daily_calendar')->where('date', $date)->first();
@@ -31,69 +32,111 @@ class LiturgicalCalendarService
     }
 
     /**
-     * The whole visible month, batch-fetched -- only days not already
-     * cached actually hit the network.
+     * Cached days only, synchronous, no network -- instant. This is what
+     * a screen should call for its FIRST paint; missing days are then
+     * backfilled separately (via an async task, typically) rather than
+     * blocking on the network here.
      */
-    public function getMonth(int $year, int $month): Collection
+    public function getCachedMonth(int $year, int $month): Collection
     {
-        $dates = $this->datesInMonth($year, $month);
+        $dates = static::datesInMonth($year, $month);
 
-        $cached = DB::table('daily_calendar')
+        return DB::table('daily_calendar')
             ->whereIn('date', $dates)
             ->get()
             ->keyBy('date');
+    }
 
-        $result = collect();
+    public function missingDatesInMonth(int $year, int $month): array
+    {
+        $dates = static::datesInMonth($year, $month);
+        $cached = $this->getCachedMonth($year, $month)->keys();
 
-        foreach ($dates as $date) {
-            if ($cached->has($date)) {
-                $result->put($date, $cached->get($date));
-                continue;
-            }
+        return $dates->diff($cached)->values()->all();
+    }
 
-            $fetched = $this->fetchAndCache($date);
-            if ($fetched !== null) {
-                $result->put($date, $fetched);
-            }
+    /**
+     * The whole visible month, batch-fetched and blocking -- kept as a
+     * synchronous fallback (e.g. if the async pool is unavailable), not
+     * the primary path anymore. Prefer cache-first + async backfill from
+     * the calling screen instead of calling this directly on mount().
+     */
+    public function getMonth(int $year, int $month): Collection
+    {
+        $cached = $this->getCachedMonth($year, $month);
+        $missing = $this->missingDatesInMonth($year, $month);
+
+        if (empty($missing)) {
+            return $cached;
         }
 
-        return $result;
+        $fetched = static::fetchMany($missing);
+        static::persist($fetched);
+
+        return $cached->merge(
+            collect($fetched)->map(fn($row) => (object) $row)
+        );
     }
 
     /** Force a fresh fetch for every day in the month, bypassing the cache. */
     public function refreshMonth(int $year, int $month): Collection
     {
-        $result = collect();
+        $dates = static::datesInMonth($year, $month)->all();
+        $fetched = static::fetchMany($dates);
+        static::persist($fetched);
 
-        foreach ($this->datesInMonth($year, $month) as $date) {
-            $fetched = $this->fetchAndCache($date);
-            if ($fetched !== null) {
-                $result->put($date, $fetched);
-            }
-        }
-
-        return $result;
-    }
-
-    protected function datesInMonth(int $year, int $month): Collection
-    {
-        //$daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-        $daysInMonth = LiturgicalCalendarService::daysInMonth($year, $month);
-
-        return collect(range(1, $daysInMonth))
-            ->map(fn($d) => sprintf('%04d-%02d-%02d', $year, $month, $d));
+        return collect($fetched)->map(fn($row) => (object) $row);
     }
 
     protected function fetchAndCache(string $date): ?object
     {
-        $readings = $this->client->fetchReadings($date);
-        $celebration = $this->client->fetchCelebration($date);
+        $raw = $this->client->fetchDay($date);
 
-        if ($readings === null && $celebration === null) {
+        if ($raw['readings'] === null && $raw['celebration'] === null) {
             return null;
         }
 
-        $row = [
+        $row = static::buildRow($date, $raw['readings'], $raw['celebration']);
+
+        DB::table('daily_calendar')->updateOrInsert(['date' => $date], $row);
+
+        return (object) $row;
+    }
+
+    /**
+     * Pure fetch, no DB access -- safe to call from inside a static
+     * async-task closure, which can't touch $this or any bound state.
+     * Returns [date => row-array] for dates that resolved; a date that
+     * failed entirely (both endpoints down) is simply absent.
+     */
+    public static function fetchMany(array $dates): array
+    {
+        $client = new CatholicReadingsClient();
+        $raw = $client->fetchMany($dates);
+
+        $rows = [];
+        foreach ($raw as $date => $pair) {
+            if ($pair['readings'] === null && $pair['celebration'] === null) {
+                continue;
+            }
+
+            $rows[$date] = static::buildRow($date, $pair['readings'], $pair['celebration']);
+        }
+
+        return $rows;
+    }
+
+    /** Writes already-fetched rows to the cache. Call from the UI thread (e.g. an async task's finished() callback). */
+    public static function persist(array $rows): void
+    {
+        foreach ($rows as $date => $row) {
+            DB::table('daily_calendar')->updateOrInsert(['date' => $date], $row);
+        }
+    }
+
+    protected static function buildRow(string $date, ?array $readings, ?array $celebration): array
+    {
+        return [
             'date' => $date,
             'season' => $readings['season'] ?? $celebration['season'] ?? null,
             'sub_season' => $readings['subSeason'] ?? $celebration['subSeason'] ?? null,
@@ -110,18 +153,19 @@ class LiturgicalCalendarService
             'celebration_image' => $celebration['celebration']['image'] ?? null,
             'fetched_at' => now(),
         ];
+    }
 
-        DB::table('daily_calendar')->updateOrInsert(['date' => $date], $row);
+    public static function datesInMonth(int $year, int $month): Collection
+    {
+        $daysInMonth = self::daysInMonth($year, $month);
 
-        return (object) $row;
+        return collect(range(1, $daysInMonth))
+            ->map(fn($d) => sprintf('%04d-%02d-%02d', $year, $month, $d));
     }
 
     /**
-     * Shared season/rank -> liturgical theme token, used by both Today
-     * and Calendar Month so the color logic lives in one place.
-     * The martyr-red heuristic is a best-effort text match against the
-     * description, since the API doesn't give us authoritative rank
-     * data for "red" days -- flagged as approximate, not authoritative.
+     * Shared season/rank -> liturgical theme token. The martyr-red
+     * heuristic is a best-effort text match, not authoritative rank data.
      */
     public static function colorToken(?object $day): ?string
     {

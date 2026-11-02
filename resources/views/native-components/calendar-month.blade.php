@@ -8,6 +8,13 @@
                 Offline — showing saved days only
             </native:text>
         </native:row>
+    @elseif ($loadingMore)
+        <native:row class="w-full items-center gap-2 p-2 rounded-lg bg-theme-surface-variant">
+            <native:activity-indicator :size="14" />
+            <native:text class="text-xs text-theme-on-surface-variant">
+                Loading the rest of this month…
+            </native:text>
+        </native:row>
     @endif
 
     <native:row class="w-full items-center justify-between">
