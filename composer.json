@@ -9,11 +9,11 @@
     ],
     "license": "MIT",
     "require": {
-        "php": "^8.3",
+        "php": "^8.4",
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",
-        "nativephp/mobile": "^4.4",
-        "nativephp/mobile-ui": "^0.4.0",
+        "nativephp/mobile": "4.7",
+        "nativephp/mobile-ui": "0.9",
         "nativephp/web-ui": "^0.1.0"
     },
     "require-dev": {
